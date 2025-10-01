@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Save, Download, Copy, FileText, Search, Trash2, Edit3 } from 'lucide-react';
+import { Camera, Save, Download, Copy, FileText, Trash2, Edit3, Printer } from 'lucide-react';
 
 const ULTRASOUND_TEMPLATES = {
   'Abdomen': {
@@ -512,28 +512,62 @@ export default function PediatricUltrasoundReport() {
   const [patientInfo, setPatientInfo] = useState({
     name: '',
     patientId: '',
-    rrn: '', // Resident Registration Number (주민등록번호)
+    rrn: '',
     age: '',
     gender: 'M',
     examDate: new Date().toISOString().split('T')[0]
   });
+  
+  const [hospitalInfo, setHospitalInfo] = useState({
+    name: 'Pediatric Medical Center',
+    department: 'Department of Radiology',
+    physicianName: 'Dr. Jane Smith, MD',
+    licenseNumber: 'License No. 12345'
+  });
+  
+  const [selectedType, setSelectedType] = useState('');
+  const [normalFindings, setNormalFindings] = useState('');
+  const [selectedAbnormal, setSelectedAbnormal] = useState([]);
+  const [additionalFindings, setAdditionalFindings] = useState('');
+  const [impression, setImpression] = useState('');
+  
+  const [savedReports, setSavedReports] = useState([]);
+  const [editingReport, setEditingReport] = useState(null);
+  const [showSavedReports, setShowSavedReports] = useState(false);
+  const [showHospitalSettings, setShowHospitalSettings] = useState(false);
 
-  // Parse Korean Resident Registration Number
+  useEffect(() => {
+    const saved = localStorage.getItem('ultrasoundReports');
+    if (saved) {
+      setSavedReports(JSON.parse(saved));
+    }
+    const savedHospital = localStorage.getItem('hospitalInfo');
+    if (savedHospital) {
+      setHospitalInfo(JSON.parse(savedHospital));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedType && ULTRASOUND_TEMPLATES[selectedType]) {
+      setNormalFindings(ULTRASOUND_TEMPLATES[selectedType].normal);
+      updateImpression();
+    }
+  }, [selectedType]);
+
+  useEffect(() => {
+    updateImpression();
+  }, [selectedAbnormal, selectedType]);
+
   const parseRRN = (rrn) => {
-    // Remove any non-digit characters
     const cleaned = rrn.replace(/\D/g, '');
     
     if (cleaned.length < 7) return null;
     
-    // Extract birth date (YYMMDD)
     const yy = cleaned.substring(0, 2);
     const mm = cleaned.substring(2, 4);
     const dd = cleaned.substring(4, 6);
-    
-    // Extract gender digit
     const genderDigit = cleaned.substring(6, 7);
     
-    // Determine century and gender
     let century;
     let gender;
     
@@ -554,7 +588,6 @@ export default function PediatricUltrasoundReport() {
     const birthMonth = parseInt(mm);
     const birthDay = parseInt(dd);
     
-    // Validate date
     if (birthMonth < 1 || birthMonth > 12 || birthDay < 1 || birthDay > 31) {
       return null;
     }
@@ -562,7 +595,6 @@ export default function PediatricUltrasoundReport() {
     const birthDate = new Date(birthYear, birthMonth - 1, birthDay);
     const today = new Date();
     
-    // Calculate age
     let years = today.getFullYear() - birthDate.getFullYear();
     let months = today.getMonth() - birthDate.getMonth();
     
@@ -575,7 +607,6 @@ export default function PediatricUltrasoundReport() {
       months--;
     }
     
-    // Format age for pediatric patients
     let ageString;
     if (years === 0) {
       ageString = `${months} months`;
@@ -593,17 +624,14 @@ export default function PediatricUltrasoundReport() {
   };
 
   const handleRRNChange = (value) => {
-    // Allow input with or without hyphen
     let formatted = value.replace(/\D/g, '');
     
-    // Auto-format with hyphen
     if (formatted.length > 6) {
       formatted = formatted.substring(0, 6) + '-' + formatted.substring(6, 13);
     }
     
     setPatientInfo({...patientInfo, rrn: formatted});
     
-    // Parse and auto-fill gender and age
     const parsed = parseRRN(value);
     if (parsed) {
       setPatientInfo(prev => ({
@@ -614,34 +642,6 @@ export default function PediatricUltrasoundReport() {
       }));
     }
   };
-  
-  const [selectedType, setSelectedType] = useState('');
-  const [normalFindings, setNormalFindings] = useState('');
-  const [selectedAbnormal, setSelectedAbnormal] = useState([]);
-  const [additionalFindings, setAdditionalFindings] = useState('');
-  const [impression, setImpression] = useState('');
-  
-  const [savedReports, setSavedReports] = useState([]);
-  const [editingReport, setEditingReport] = useState(null);
-  const [showSavedReports, setShowSavedReports] = useState(false);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('ultrasoundReports');
-    if (saved) {
-      setSavedReports(JSON.parse(saved));
-    }
-  }, []);
-
-  useEffect(() => {
-    if (selectedType && ULTRASOUND_TEMPLATES[selectedType]) {
-      setNormalFindings(ULTRASOUND_TEMPLATES[selectedType].normal);
-      updateImpression();
-    }
-  }, [selectedType]);
-
-  useEffect(() => {
-    updateImpression();
-  }, [selectedAbnormal, selectedType]);
 
   const updateImpression = () => {
     if (!selectedType || !ULTRASOUND_TEMPLATES[selectedType]) return;
@@ -702,8 +702,292 @@ export default function PediatricUltrasoundReport() {
     }
   };
 
-  const generateReport = () => {
+  const generatePrintablePDF = () => {
+    if (!patientInfo.name || !selectedType) {
+      alert('Please enter patient name and select examination type.');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    const reportDate = new Date().toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Ultrasound Report - ${patientInfo.name}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 20mm;
+    }
+    
+    @media print {
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Times New Roman', serif;
+      font-size: 11pt;
+      line-height: 1.6;
+      color: #000;
+      background: white;
+      padding: 20px;
+    }
+    
+    .report-container {
+      max-width: 210mm;
+      margin: 0 auto;
+      background: white;
+    }
+    
+    .header {
+      text-align: center;
+      border-bottom: 2px solid #000;
+      padding-bottom: 15px;
+      margin-bottom: 20px;
+    }
+    
+    .hospital-name {
+      font-size: 20pt;
+      font-weight: bold;
+      margin-bottom: 5px;
+      letter-spacing: 1px;
+    }
+    
+    .department {
+      font-size: 12pt;
+      color: #333;
+      margin-bottom: 15px;
+    }
+    
+    .report-title {
+      font-size: 16pt;
+      font-weight: bold;
+      margin-top: 10px;
+      letter-spacing: 2px;
+    }
+    
+    .patient-info {
+      border: 1px solid #000;
+      padding: 15px;
+      margin-bottom: 20px;
+      background: #f9f9f9;
+    }
+    
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    .info-table td {
+      padding: 5px 10px;
+      font-size: 11pt;
+    }
+    
+    .info-label {
+      font-weight: bold;
+      width: 25%;
+    }
+    
+    .info-value {
+      width: 25%;
+    }
+    
+    .section-title {
+      font-size: 12pt;
+      font-weight: bold;
+      margin-top: 20px;
+      margin-bottom: 10px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #333;
+    }
+    
+    .findings-content {
+      white-space: pre-wrap;
+      font-family: 'Courier New', monospace;
+      font-size: 10pt;
+      line-height: 1.5;
+      padding: 10px;
+      background: #fafafa;
+      border: 1px solid #ddd;
+    }
+    
+    .abnormal-list {
+      padding-left: 20px;
+      margin: 10px 0;
+    }
+    
+    .abnormal-item {
+      margin: 8px 0;
+      line-height: 1.5;
+    }
+    
+    .impression-section {
+      margin-top: 25px;
+      padding-top: 15px;
+      border-top: 2px solid #000;
+    }
+    
+    .impression-content {
+      white-space: pre-wrap;
+      font-size: 11pt;
+      line-height: 1.7;
+      padding: 15px;
+      background: #f5f5f5;
+      border-left: 4px solid #333;
+    }
+    
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #000;
+      font-size: 10pt;
+    }
+    
+    .footer-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    
+    .physician-info {
+      text-align: left;
+    }
+    
+    .report-date {
+      text-align: right;
+    }
+    
+    .print-button {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 24px;
+      background: #4F46E5;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14pt;
+      cursor: pointer;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      z-index: 1000;
+    }
+    
+    .print-button:hover {
+      background: #4338CA;
+    }
+    
+    .signature-line {
+      margin-top: 30px;
+      border-top: 1px solid #000;
+      width: 200px;
+      padding-top: 5px;
+      text-align: center;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body>
+  <button class="print-button no-print" onclick="window.print()">🖨️ Print / Save as PDF</button>
+  
+  <div class="report-container">
+    <div class="header">
+      <div class="hospital-name">${hospitalInfo.name}</div>
+      <div class="department">${hospitalInfo.department}</div>
+      <div class="report-title">ULTRASOUND REPORT</div>
+    </div>
+    
+    <div class="patient-info">
+      <table class="info-table">
+        <tr>
+          <td class="info-label">Patient Name:</td>
+          <td class="info-value">${patientInfo.name}</td>
+          <td class="info-label">Patient ID:</td>
+          <td class="info-value">${patientInfo.patientId}</td>
+        </tr>
+        <tr>
+          <td class="info-label">Age:</td>
+          <td class="info-value">${patientInfo.age}</td>
+          <td class="info-label">Gender:</td>
+          <td class="info-value">${patientInfo.gender === 'M' ? 'Male' : 'Female'}</td>
+        </tr>
+        <tr>
+          <td class="info-label">Exam Date:</td>
+          <td class="info-value">${patientInfo.examDate}</td>
+          <td class="info-label">Examination:</td>
+          <td class="info-value">${ULTRASOUND_TEMPLATES[selectedType]?.name || ''}</td>
+        </tr>
+      </table>
+    </div>
+    
+    <div class="section-title">FINDINGS:</div>
+    <div class="findings-content">${normalFindings}</div>
+    
+    ${selectedAbnormal.length > 0 ? `
+    <div class="section-title">ABNORMAL FINDINGS:</div>
+    <div class="abnormal-list">
+      ${selectedAbnormal.map((abnormal, index) => `
+        <div class="abnormal-item">${index + 1}. ${abnormal}</div>
+      `).join('')}
+    </div>
+    ` : ''}
+    
+    ${additionalFindings.trim() ? `
+    <div class="section-title">ADDITIONAL FINDINGS:</div>
+    <div class="findings-content">${additionalFindings}</div>
+    ` : ''}
+    
+    ${impression.trim() ? `
+    <div class="impression-section">
+      <div class="section-title">IMPRESSION:</div>
+      <div class="impression-content">${impression}</div>
+    </div>
+    ` : ''}
+    
+    <div class="footer">
+      <div class="footer-content">
+        <div class="physician-info">
+          <div><strong>Reported by:</strong></div>
+          <div>${hospitalInfo.physicianName}</div>
+          <div>${hospitalInfo.licenseNumber}</div>
+          <div class="signature-line">Physician Signature</div>
+        </div>
+        <div class="report-date">
+          <div><strong>Report Date:</strong></div>
+          <div>${reportDate}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+    `;
+    
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
+  const handleCopyToClipboard = () => {
     let report = `PEDIATRIC ULTRASOUND REPORT\n${'='.repeat(70)}\n\n`;
+    report += `${hospitalInfo.name}\n${hospitalInfo.department}\n\n`;
     report += `Patient Name: ${patientInfo.name}\n`;
     report += `Patient ID: ${patientInfo.patientId}\n`;
     if (patientInfo.rrn) {
@@ -719,8 +1003,8 @@ export default function PediatricUltrasoundReport() {
     
     if (selectedAbnormal.length > 0) {
       report += `ABNORMAL FINDINGS:\n`;
-      selectedAbnormal.forEach(abnormal => {
-        report += `- ${abnormal}\n`;
+      selectedAbnormal.forEach((abnormal, index) => {
+        report += `${index + 1}. ${abnormal}\n`;
       });
       report += `\n`;
     }
@@ -730,36 +1014,14 @@ export default function PediatricUltrasoundReport() {
     }
     
     if (impression.trim()) {
-      report += `IMPRESSION:\n${'-'.repeat(70)}\n${impression}\n`;
+      report += `IMPRESSION:\n${'-'.repeat(70)}\n${impression}\n\n`;
     }
     
-    return report;
-  };
-
-  const handleCopyToClipboard = () => {
-    const report = generateReport();
+    report += `Reported by: ${hospitalInfo.physicianName}\n`;
+    report += `${hospitalInfo.licenseNumber}\n`;
+    
     navigator.clipboard.writeText(report);
     alert('Copied to clipboard!');
-  };
-
-  const handleDownloadPDF = async () => {
-    if (!patientInfo.name || !selectedType) {
-      alert('Please enter patient name and select examination type.');
-      return;
-    }
-
-    const report = generateReport();
-    const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    
-    const fileName = `${patientInfo.examDate}_${patientInfo.name}_${ULTRASOUND_TEMPLATES[selectedType]?.name.replace(/\s+/g, '_')}.txt`;
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   const handleReset = () => {
@@ -781,6 +1043,12 @@ export default function PediatricUltrasoundReport() {
     }
   };
 
+  const handleSaveHospitalInfo = () => {
+    localStorage.setItem('hospitalInfo', JSON.stringify(hospitalInfo));
+    alert('Hospital information saved!');
+    setShowHospitalSettings(false);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4">
       <div className="max-w-6xl mx-auto">
@@ -796,15 +1064,75 @@ export default function PediatricUltrasoundReport() {
                 <p className="text-gray-500 text-sm mt-1">Professional Report Generator</p>
               </div>
             </div>
-            <button
-              onClick={() => setShowSavedReports(!showSavedReports)}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition"
-            >
-              <FileText className="w-5 h-5" />
-              Saved Reports ({savedReports.length})
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowHospitalSettings(!showHospitalSettings)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
+              >
+                <FileText className="w-5 h-5" />
+                Settings
+              </button>
+              <button
+                onClick={() => setShowSavedReports(!showSavedReports)}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition"
+              >
+                <FileText className="w-5 h-5" />
+                Saved ({savedReports.length})
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Hospital Settings */}
+        {showHospitalSettings && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Hospital Information Settings</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Hospital Name</label>
+                <input
+                  type="text"
+                  value={hospitalInfo.name}
+                  onChange={(e) => setHospitalInfo({...hospitalInfo, name: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
+                <input
+                  type="text"
+                  value={hospitalInfo.department}
+                  onChange={(e) => setHospitalInfo({...hospitalInfo, department: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Physician Name</label>
+                <input
+                  type="text"
+                  value={hospitalInfo.physicianName}
+                  onChange={(e) => setHospitalInfo({...hospitalInfo, physicianName: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">License Number</label>
+                <input
+                  type="text"
+                  value={hospitalInfo.licenseNumber}
+                  onChange={(e) => setHospitalInfo({...hospitalInfo, licenseNumber: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <button
+              onClick={handleSaveHospitalInfo}
+              className="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+            >
+              Save Hospital Information
+            </button>
+          </div>
+        )}
 
         {/* Saved Reports List */}
         {showSavedReports && (
@@ -1044,12 +1372,12 @@ export default function PediatricUltrasoundReport() {
             Copy to Clipboard
           </button>
           <button
-            onClick={handleDownloadPDF}
-            className="flex items-center gap-2 px-6 py-3 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={generatePrintablePDF}
+            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={!selectedType || !patientInfo.name}
           >
-            <Download className="w-5 h-5" />
-            Download Report
+            <Printer className="w-5 h-5" />
+            Print / Save as PDF
           </button>
           <button
             onClick={handleReset}
@@ -1062,7 +1390,7 @@ export default function PediatricUltrasoundReport() {
 
         {/* Footer */}
         <div className="text-center mt-8 text-gray-500 text-sm">
-          <p>© 2025 Pediatric Ultrasound Report System</p>
+          <p>© 2025 {hospitalInfo.name}</p>
           <p className="mt-1">This system is a tool to assist medical professionals.</p>
         </div>
       </div>
