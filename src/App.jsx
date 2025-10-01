@@ -964,16 +964,17 @@ export default function PediatricUltrasoundReport() {
     
     <div class="footer">
       <div class="footer-content">
+      <div class="report-date">
+          <div><strong>Report Date:</strong></div>
+          <div>${reportDate}</div>
+        </div>
         <div class="physician-info">
           <div><strong>Reported by:</strong></div>
           <div>${hospitalInfo.physicianName}</div>
           <div>${hospitalInfo.licenseNumber}</div>
           <div class="signature-line">Physician Signature</div>
         </div>
-        <div class="report-date">
-          <div><strong>Report Date:</strong></div>
-          <div>${reportDate}</div>
-        </div>
+        
       </div>
     </div>
   </div>
