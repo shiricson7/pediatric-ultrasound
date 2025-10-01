@@ -519,10 +519,10 @@ export default function PediatricUltrasoundReport() {
   });
   
   const [hospitalInfo, setHospitalInfo] = useState({
-    name: 'Pediatric Medical Center',
-    department: 'Department of Radiology',
-    physicianName: 'Dr. Jane Smith, MD',
-    licenseNumber: 'License No. 12345'
+    name: 'Shiricson Pediatric Clinic',
+    department: 'Department of Pediatrics',
+    physicianName: 'Dr. Iksoon Shin, MD',
+    licenseNumber: 'License No. 96013'
   });
   
   const [selectedType, setSelectedType] = useState('');
